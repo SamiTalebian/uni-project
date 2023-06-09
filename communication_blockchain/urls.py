@@ -16,6 +16,12 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 
+from Auction import views
+
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('add-member/', views.add_member),
+    path('create-contract/', views.create_contract),
+    path('find-winner/', views.find_winner),
+    path('place-bi/', views.place_bid),
 ]

@@ -37,7 +37,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'Auction'
+    'Auction',
+    'rest_framework'
 ]
 
 #ETHEREUM_NODE_URL = 'http://localhost:8545'
