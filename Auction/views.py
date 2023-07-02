@@ -1,28 +1,55 @@
 import json
 from django.shortcuts import render
-from requests import Response
+from rest_framework.response import Response
 from web3 import Web3
 from rest_framework.decorators import api_view
 from Auction.models import Contract
 import datetime
+import os
 
 web3 = Web3(Web3.HTTPProvider('HTTP://127.0.0.1:7545'))
+PRIVATE_KEY = '0xb7ceafbb136d9e0efa6bd3e470541e7fb68ab7198ae06aedf08318f3d15ea61b'
 
-with open('Auction\Auction.json') as f:
+with open('bin/Auction/Auction.json') as f:
     contract_json = json.load(f)
-abi = contract_json['abi']
+contract_abi = contract_json['abi']
+contract_bytecode = contract_json['bytecode']
 
-contract = web3.eth.contract(address='0x076a4390ee353C8c6A07861BaDf49dd39fbF827D', abi=abi)
+# Deploy the contract
+deployed_contract = web3.eth.contract(
+    bytecode=contract_bytecode, abi=contract_abi)
+transaction = deployed_contract.constructor().build_transaction({
+    'from': web3.eth.accounts[0],
+    'gas': 6721975,
+    'nonce': web3.eth.get_transaction_count(web3.eth.accounts[0])
+})
+
+# Get the transaction receipt
+signed_transaction = web3.eth.account.sign_transaction(
+    transaction, private_key=PRIVATE_KEY)
+transaction_hash = web3.eth.send_raw_transaction(
+    signed_transaction.rawTransaction)
+transaction_receipt = web3.eth.wait_for_transaction_receipt(transaction_hash)
+
+
+# Retrieve the contract address from the transaction receipt
+CONTRACT_ADDRESS = transaction_receipt['contractAddress']
+print("Contract deployed at address:", CONTRACT_ADDRESS)
+
+contract = web3.eth.contract(
+    address=CONTRACT_ADDRESS, abi=contract_abi)
 web3.eth.default_account = web3.eth.accounts[0]
+
 
 @api_view(['POST'])
 def create_contract(request):
-    contract_address = request.data.get('contract_address')
-    start_time = request.data.get('start_time')
-    finish_time = request.data.get('finish_time')
-    min_bid = request.data.get('min_bid')
-    members = [address for address in request.data.get('members')]
-    public_auction = bool(request.data.get('public_auction'))
+    contract_address = web3.to_checksum_address(CONTRACT_ADDRESS)
+    start_time = request.data.get('startTime')
+    finish_time = request.data.get('finishTime')
+    min_bid = request.data.get('minBid')
+    members = [web3.to_checksum_address(address)
+               for address in request.data.get('members')]
+    public_auction = bool(request.data.get('publicAuction'))
 
     # Call the createContract method on the contract
     tx_hash = contract.functions.createContract(
@@ -38,75 +65,116 @@ def create_contract(request):
 
     # Create a new Contract object and save it to the database
     c = Contract(
-        creator_address=contract_address,
-        created_time=datetime.datetime.fromtimestamp(int(start_time)),
+        contract_address=contract_address,
+        start_time=datetime.datetime.fromtimestamp(int(start_time)),
         finish_time=datetime.datetime.fromtimestamp(int(finish_time)),
-        cost=min_bid,
+        min_bid=min_bid,
+        public_auction=public_auction
     )
     c.save()
 
-    return Response(c, status=200)
+    return Response('object saved', status=200)
 
     # Render the create contract form
 
-def place_bid(request, pk):
+
+@api_view(['POST'])
+def place_bid(request, pk, user_address):
     # Get the Contract object from the database
     c = Contract.objects.get(pk=pk)
 
-    if request.method == 'POST':
-        # Get the form data
-        bid_amount = int(request.POST.get('bid_amount'))
+    # Get the form data
+    bid_amount = int(request.data.get('bid_amount'))
 
-        # Call the placeBid method on the contract
-        tx_hash = contract.functions.placeBid(pk).transact({'value': bid_amount})
+    if bid_amount <= c.min_bid:
+        return Response('Bid amount is less than the minimum bid.', status=400)
 
-        # Update the Contract object in the database
-        c.bids[msg.sender][pk] += bid_amount
-        c.tx_hash = tx_hash
-        c.save()
+    if not c.public_auction:
+        allowed = user_address in c.members
+        if not allowed:
+            return Response('You are not allowed to bid in this auction.', status=400)
 
-        # Redirect to the contract detail page
-        return redirect('contract_detail', pk=pk)
+    # Perform the bid
+    if user_address not in c.bidders:
+        c.bidders.append(user_address)
 
-    # Render the place bid form
-    return render(request, 'place_bid.html', {'contract': c})
+    transaction = contract.functions.placeBid(pk-1).transact(
+        {'from': user_address, 'value': bid_amount})
 
+    # Wait for the transaction to be mined
+    transaction_receipt = web3.eth.wait_for_transaction_receipt(transaction)
+    # transaction_hash = web3.toHex(transaction)
+
+    for i, value in enumerate(c.bidders):
+        if value == user_address:
+            c.bidders[i] += f' , {bid_amount}'
+            break
+    # c.bidders[user_address] += f' , {bid_amount}'
+
+    # Save the updated contract
+    c.save()
+
+    return Response('Bid placed successfully.', status=200)
+
+
+@api_view(['GET'])
 def find_winner(request, pk):
     # Get the Contract object from the database
     c = Contract.objects.get(pk=pk)
 
-    if request.method == 'POST':
-        # Call the findTheWinner method on the contract
-        tx_hash = contract.functions.findTheWinner(pk).transact()
+    highest_amount = 0
+    highest_address = None
+    highest_string = None
 
-        # Update the Contract object in the database
-        c.tx_hash = tx_hash
-        c.save()
+    for entry in c.bidders:
+        # Split the entry into address and amount
+        address, amount = entry.split(', ')
+        amount = int(amount)
 
-        # Redirect to the contract detail page
-        return redirect('contract_detail', pk=pk)
+        if amount > highest_amount:
+            highest_amount = amount
+            highest_address = address
 
-    # Render the find winner form
-    return render(request, 'find_winner.html', {'contract': c})
+    # Redirect to the contract detail page
+    return Response({'address_winner': highest_address, 'amount': highest_amount}, 200)
 
+
+@api_view(['POST'])
 def add_member(request, pk):
     # Get the Contract object from the database
     c = Contract.objects.get(pk=pk)
 
-    if request.method == 'POST':
-        # Get the form data
-        member = request.POST.get('member')
+    member = request.data.get('member_id')
+    # Call the addMember method on the contract
+    print(member)
+    print(CONTRACT_ADDRESS)
 
-        # Call the addMember method on the contract
-        tx_hash = contract.functions.addMember(pk, member).transact()
+    contract.functions.addMember((pk-1),  member).transact()
 
-        # Update the Contract object in the database
-        c.members.append(member)
-        c.tx_hash = tx_hash
-        c.save()
+    # Update the Contract object in the database
+    c.members.append(member)
+    c.save()
 
-        # Redirect to the contract detail page
-        return redirect('contract_detail', pk=pk)
+    # Redirect to the contract detail page
+    return Response('member added', 200)
 
-    # Render the add member form
-    return render(request, 'add_member.html', {'contract': c})
+
+@api_view(['GET'])
+def get_contract(request, contract_id):
+    # Get the Contract object from the database
+    c = Contract.objects.get(pk=contract_id)
+
+    contract_data = contract.functions.getContract(contract_id-1)
+
+    # Format the response data
+    response_data = {
+        'contract_address': contract_data[0],
+        'start_time': contract_data[1],
+        'finish_time': contract_data[2],
+        'min_bid': contract_data[3],
+        'bidders': contract_data[4],
+        'members': contract_data[5],
+        'public_auction': contract_data[6]
+    }
+
+    return Response(response_data, status=200)

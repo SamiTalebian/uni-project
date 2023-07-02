@@ -20,8 +20,9 @@ from Auction import views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('add-member/', views.add_member),
+    path('add-member/<int:pk>', views.add_member),
+    path('get-contract/<int:contract_id>', views.get_contract),
     path('create-contract/', views.create_contract),
-    path('find-winner/', views.find_winner),
-    path('place-bi/', views.place_bid),
+    path('find-winner/<int:pk>', views.find_winner),
+    path('place-bid/<int:pk>/<str:user_address>', views.place_bid),
 ]
