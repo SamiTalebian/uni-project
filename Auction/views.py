@@ -2,10 +2,15 @@ import json
 from django.shortcuts import render
 from rest_framework.response import Response
 from web3 import Web3
+from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.decorators import api_view
-from Auction.models import Contract
+from drf_yasg.utils import swagger_auto_schema
+from django.contrib.auth import authenticate
+from Auction.models import Contract, CustomUser
 import datetime
 import os
+from rest_framework.viewsets import ModelViewSet
+from Auction.serializer import CustomUserSerializer, LoginSerializer
 
 web3 = Web3(Web3.HTTPProvider('HTTP://127.0.0.1:7545'))
 PRIVATE_KEY = '0xb7ceafbb136d9e0efa6bd3e470541e7fb68ab7198ae06aedf08318f3d15ea61b'
@@ -39,7 +44,6 @@ print("Contract deployed at address:", CONTRACT_ADDRESS)
 contract = web3.eth.contract(
     address=CONTRACT_ADDRESS, abi=contract_abi)
 web3.eth.default_account = web3.eth.accounts[0]
-
 
 @api_view(['POST'])
 def create_contract(request):
@@ -178,3 +182,23 @@ def get_contract(request, contract_id):
     }
 
     return Response(response_data, status=200)
+
+class CustomUserView(ModelViewSet):
+    serializer_class = CustomUserSerializer
+    queryset = CustomUser.objects.all()
+
+@swagger_auto_schema(method='POST', request_body=LoginSerializer)
+@api_view(['POST'])
+def login(request):
+    try:
+        user = authenticate(request, username=request.data['username'], password=request.data['password'])
+        if user is not None:
+            refresh = RefreshToken.for_user(user)
+            return Response({
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+            }, status=200)
+        else:
+            return Response({'error': 'Invalid credentials'}, status=401)
+    except:
+            return Response({'error': 'Invalid credentials'}, status=401)

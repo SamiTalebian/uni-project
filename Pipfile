@@ -8,6 +8,9 @@ django = "*"
 web3 = "*"
 django-restframework = "*"
 djangorestframework = "*"
+drf-yasg = "*"
+pyjwt = "*"
+djangorestframework-simplejwt = "*"
 
 [dev-packages]
 
