@@ -12,8 +12,8 @@ import os
 from rest_framework.viewsets import ModelViewSet
 from Auction.serializer import CustomUserSerializer, LoginSerializer
 
-web3 = Web3(Web3.HTTPProvider('HTTP://172.20.10.4:7545'))
-PRIVATE_KEY = '0x47c340022e776b206cf7a8a5e37191e89ee748b472a693b537a1dc1db00637ca'
+web3 = Web3(Web3.HTTPProvider('HTTP://127.0.0.1:7545'))
+PRIVATE_KEY = '0x1a5f8d673b5addc77815391c48e1e307d57a945a665229b8f5f0f132bfe83690'
 
 with open('bin/Auction/Auction.json') as f:
     contract_json = json.load(f)
