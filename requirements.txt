@@ -6,7 +6,9 @@ attrs==23.1.0
 base58==2.1.1
 bitarray==2.7.4
 certifi==2023.5.7
+cffi==1.15.1
 charset-normalizer==3.1.0
+cryptography==41.0.2
 cytoolz==0.12.1
 distlib==0.3.6
 Django==4.2.2
@@ -38,6 +40,8 @@ parsimonious==0.9.0
 pipenv==2023.6.2
 platformdirs==3.5.1
 protobuf==4.23.2
+pycparser==2.21
+pycryptodome==3.18.0
 PyJWT==2.7.0
 pyrsistent==0.19.3
 pytz==2023.3
