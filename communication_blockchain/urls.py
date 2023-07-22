@@ -44,6 +44,7 @@ schema_view = get_schema_view(
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include(router.urls)),
+    path('current_user/', views.current_user),
     path('add-member/<int:pk>', views.add_member),
     path('get-contract/<int:contract_id>', views.get_contract),
     path('create-contract/', views.create_contract),

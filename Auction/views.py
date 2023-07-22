@@ -2,6 +2,7 @@ import json
 from django.shortcuts import render
 from rest_framework.response import Response
 from web3 import Web3
+from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.decorators import api_view
 from drf_yasg.utils import swagger_auto_schema
@@ -12,38 +13,39 @@ import os
 from rest_framework.viewsets import ModelViewSet
 from Auction.serializer import CustomUserSerializer, LoginSerializer
 
-web3 = Web3(Web3.HTTPProvider('HTTP://127.0.0.1:7545'))
-PRIVATE_KEY = '0x1a5f8d673b5addc77815391c48e1e307d57a945a665229b8f5f0f132bfe83690'
+# web3 = Web3(Web3.HTTPProvider('HTTP://127.0.0.1:7545'))
+# PRIVATE_KEY = '0x1a5f8d673b5addc77815391c48e1e307d57a945a665229b8f5f0f132bfe83690'
 
-with open('bin/Auction/Auction.json') as f:
-    contract_json = json.load(f)
-contract_abi = contract_json['abi']
-contract_bytecode = contract_json['bytecode']
+# with open('bin/Auction/Auction.json') as f:
+#     contract_json = json.load(f)
 
-# Deploy the contract
-deployed_contract = web3.eth.contract(
-    bytecode=contract_bytecode, abi=contract_abi)
-transaction = deployed_contract.constructor().build_transaction({
-    'from': web3.eth.accounts[0],
-    'gas': 6721975,
-    'nonce': web3.eth.get_transaction_count(web3.eth.accounts[0])
-})
+# contract_abi = contract_json['abi']
+# contract_bytecode = contract_json['bytecode']
 
-# Get the transaction receipt
-signed_transaction = web3.eth.account.sign_transaction(
-    transaction, private_key=PRIVATE_KEY)
-transaction_hash = web3.eth.send_raw_transaction(
-    signed_transaction.rawTransaction)
-transaction_receipt = web3.eth.wait_for_transaction_receipt(transaction_hash)
+# # Deploy the contract
+# deployed_contract = web3.eth.contract(
+#     bytecode=contract_bytecode, abi=contract_abi)
+# transaction = deployed_contract.constructor().build_transaction({
+#     'from': web3.eth.accounts[0],
+#     'gas': 6721975,
+#     'nonce': web3.eth.get_transaction_count(web3.eth.accounts[0])
+# })
+
+# # Get the transaction receipt
+# signed_transaction = web3.eth.account.sign_transaction(
+#     transaction, private_key=PRIVATE_KEY)
+# transaction_hash = web3.eth.send_raw_transaction(
+#     signed_transaction.rawTransaction)
+# transaction_receipt = web3.eth.wait_for_transaction_receipt(transaction_hash)
 
 
-# Retrieve the contract address from the transaction receipt
-CONTRACT_ADDRESS = transaction_receipt['contractAddress']
-print("Contract deployed at address:", CONTRACT_ADDRESS)
+# # Retrieve the contract address from the transaction receipt
+# CONTRACT_ADDRESS = transaction_receipt['contractAddress']
+# print("Contract deployed at address:", CONTRACT_ADDRESS)
 
-contract = web3.eth.contract(
-    address=CONTRACT_ADDRESS, abi=contract_abi)
-web3.eth.default_account = web3.eth.accounts[0]
+# contract = web3.eth.contract(
+#     address=CONTRACT_ADDRESS, abi=contract_abi)
+# web3.eth.default_account = web3.eth.accounts[0]
 
 
 @api_view(['POST'])
@@ -186,6 +188,7 @@ def get_contract(request, contract_id):
 
 
 class CustomUserView(ModelViewSet):
+    # permission_classes = [IsAuthenticated]
     serializer_class = CustomUserSerializer
     queryset = CustomUser.objects.all()
 
@@ -206,3 +209,10 @@ def login(request):
             return Response({'error': 'Invalid credentials'}, status=401)
     except:
         return Response({'error': 'Invalid credentials'}, status=401)
+    
+@api_view(['GET'])
+def current_user(request):
+    try:
+        return Response(CustomUserSerializer(CustomUser.objects.get(id=request.user.id)).data)
+    except:
+        return Response({'message':'user not valid'}, 403)
