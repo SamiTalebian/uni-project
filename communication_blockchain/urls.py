@@ -25,16 +25,12 @@ from Auction import views
 
 
 router = SimpleRouter()
-router.register('users',views.CustomUserView)
+router.register('register', views.CustomUserView)
 
 schema_view = get_schema_view(
     openapi.Info(
         title="BLockChain",
         default_version='v1',
-        description="APIs",
-        terms_of_service="https://www.google.com/policies/terms/",
-        contact=openapi.Contact(email="sami9077@gmail.com"),
-        license=openapi.License(name="Talebian Tazmin co."),
     ),
     public=True,
     permission_classes=(permissions.AllowAny,),
@@ -43,15 +39,18 @@ schema_view = get_schema_view(
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', include(router.urls)),
-    path('current_user/', views.current_user),
-    path('add-member/<int:pk>', views.add_member),
-    path('get-contract/<int:contract_id>', views.get_contract),
-    path('create-contract/', views.create_contract),
-    path('find-winner/<int:pk>', views.find_winner),
-    path('place-bid/<int:pk>/<str:user_address>', views.place_bid),
-    path('login/', views.login),
+    path('auth/', include(router.urls)),
+    path('auth/current-user', views.current_user),
+    path('contracts/<int:contractId>/add-member', views.add_member),
+    path('contracts', views.get_contracts),
+    path('contracts/<int:contractId>', views.get_contract),
+    path('contracts/create', views.create_contract),
+    path('contracts/<int:contractId>/find-winner', views.find_winner),
+    path('contracts/<int:contractId>/place-bid/<str:userId>', views.place_bid),
+    path('auth/login', views.login),
     # path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
-    path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
+    path('docs/', schema_view.with_ui('swagger',
+         cache_timeout=0), name='schema-swagger-ui'),
+    path('redoc/', schema_view.with_ui('redoc',
+         cache_timeout=0), name='schema-redoc'),
 ]

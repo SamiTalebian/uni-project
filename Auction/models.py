@@ -28,19 +28,24 @@ class Contract(models.Model):
     start_time = models.DateTimeField()
     finish_time = models.DateTimeField()
     min_bid = models.FloatField()
-    # bidders = models.JSONField(default=list, null=True, blank=True)
-    members = models.JSONField(default=list, null=True, blank=True)
+    bidders = models.JSONField(null=True, blank=True)
+    members = models.ManyToManyField(
+        'CustomUser', null=True, blank=True)
     public_auction = models.BooleanField(default=False)
 
     def __str__(self):
         return self.contract_address
 
+
 class CustomUser(User):
-    ROLE_CHOICES = (('bidder','1'),('contract_maker','2'))
+    ROLE_CHOICES = (('bidder', '1'), ('contract_maker', '2'))
     role = models.CharField(choices=ROLE_CHOICES, max_length=40, null=True)
     wallet_address = models.CharField(max_length=255)
 
+
 class Transition(models.Model):
-    contract = models.OneToOneField(Contract, related_name='transition',on_delete=models.CASCADE)
-    user = models.OneToOneField(CustomUser,related_name='transition',on_delete=models.CASCADE)
+    contract = models.OneToOneField(
+        Contract, related_name='transition', on_delete=models.CASCADE)
+    user = models.OneToOneField(
+        CustomUser, related_name='transition', on_delete=models.CASCADE)
     bid = models.FloatField()

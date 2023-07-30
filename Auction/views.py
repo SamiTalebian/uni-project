@@ -11,41 +11,41 @@ from Auction.models import Contract, CustomUser
 import datetime
 import os
 from rest_framework.viewsets import ModelViewSet
-from Auction.serializer import CustomUserSerializer, LoginSerializer
+from Auction.serializer import ContractSerializer, CustomUserSerializer, LoginSerializer
 
-# web3 = Web3(Web3.HTTPProvider('HTTP://127.0.0.1:7545'))
-# PRIVATE_KEY = '0x1a5f8d673b5addc77815391c48e1e307d57a945a665229b8f5f0f132bfe83690'
+web3 = Web3(Web3.HTTPProvider('HTTP://127.0.0.1:7545'))
+PRIVATE_KEY = '0x33228ce70aeb09ea6089fc19af87ca65949c850ee7eb6683252626810931fd1e'
 
-# with open('bin/Auction/Auction.json') as f:
-#     contract_json = json.load(f)
+with open('bin/Auction/Auction.json') as f:
+    contract_json = json.load(f)
 
-# contract_abi = contract_json['abi']
-# contract_bytecode = contract_json['bytecode']
+contract_abi = contract_json['abi']
+contract_bytecode = contract_json['bytecode']
 
-# # Deploy the contract
-# deployed_contract = web3.eth.contract(
-#     bytecode=contract_bytecode, abi=contract_abi)
-# transaction = deployed_contract.constructor().build_transaction({
-#     'from': web3.eth.accounts[0],
-#     'gas': 6721975,
-#     'nonce': web3.eth.get_transaction_count(web3.eth.accounts[0])
-# })
+# Deploy the contract
+deployed_contract = web3.eth.contract(
+    bytecode=contract_bytecode, abi=contract_abi)
+transaction = deployed_contract.constructor().build_transaction({
+    'from': web3.eth.accounts[0],
+    'gas': 6721975,
+    'nonce': web3.eth.get_transaction_count(web3.eth.accounts[0])
+})
 
-# # Get the transaction receipt
-# signed_transaction = web3.eth.account.sign_transaction(
-#     transaction, private_key=PRIVATE_KEY)
-# transaction_hash = web3.eth.send_raw_transaction(
-#     signed_transaction.rawTransaction)
-# transaction_receipt = web3.eth.wait_for_transaction_receipt(transaction_hash)
+# Get the transaction receipt
+signed_transaction = web3.eth.account.sign_transaction(
+    transaction, private_key=PRIVATE_KEY)
+transaction_hash = web3.eth.send_raw_transaction(
+    signed_transaction.rawTransaction)
+transaction_receipt = web3.eth.wait_for_transaction_receipt(transaction_hash)
 
 
-# # Retrieve the contract address from the transaction receipt
-# CONTRACT_ADDRESS = transaction_receipt['contractAddress']
-# print("Contract deployed at address:", CONTRACT_ADDRESS)
+# Retrieve the contract address from the transaction receipt
+CONTRACT_ADDRESS = transaction_receipt['contractAddress']
+print("Contract deployed at address:", CONTRACT_ADDRESS)
 
-# contract = web3.eth.contract(
-#     address=CONTRACT_ADDRESS, abi=contract_abi)
-# web3.eth.default_account = web3.eth.accounts[0]
+contract = web3.eth.contract(
+    address=CONTRACT_ADDRESS, abi=contract_abi)
+web3.eth.default_account = web3.eth.accounts[0]
 
 
 @api_view(['POST'])
@@ -79,6 +79,14 @@ def create_contract(request):
         public_auction=public_auction
     )
     c.save()
+    for member in members:
+        m = CustomUser.objects.get_or_create(
+            username=member, wallet_address=member, role=1)
+        if m[1] == False:
+            m[0].save()
+
+        c.members.add(m[0])
+    c.save()
 
     return Response('object saved', status=200)
 
@@ -86,9 +94,10 @@ def create_contract(request):
 
 
 @api_view(['POST'])
-def place_bid(request, pk, user_address):
+def place_bid(request, contractId, userId):
     # Get the Contract object from the database
-    c = Contract.objects.get(pk=pk)
+    c = Contract.objects.prefetch_related('members').get(pk=contractId)
+    user = CustomUser.objects.get(pk=userId)
 
     # Get the form data
     bid_amount = int(request.data.get('bid_amount'))
@@ -97,23 +106,26 @@ def place_bid(request, pk, user_address):
         return Response('Bid amount is less than the minimum bid.', status=400)
 
     if not c.public_auction:
-        allowed = user_address in c.members
+        allowed = c.members.filter(wallet_address=user.wallet_address).exists()
         if not allowed:
-            return Response('You are not allowed to bid in this auction.', status=400)
+            return Response('You are not allowed to bid in this auction.', status=406)
 
     # Perform the bid
-    if user_address not in c.bidders:
-        c.bidders.append(user_address)
+    if user.wallet_address not in c.bidders:
+        c.bidders.append(user.wallet_address)
+    else:
+        c.bidders.remove(user.wallet_address)
+        c.bidders.append(user.wallet_address)
 
-    transaction = contract.functions.placeBid(pk-1).transact(
-        {'from': user_address, 'value': bid_amount})
+    transaction = contract.functions.placeBid(contractId-1).transact(
+        {'from': user.wallet_address, 'value': bid_amount})
 
     # Wait for the transaction to be mined
     transaction_receipt = web3.eth.wait_for_transaction_receipt(transaction)
     # transaction_hash = web3.toHex(transaction)
 
     for i, value in enumerate(c.bidders):
-        if value == user_address:
+        if value == user.wallet_address:
             c.bidders[i] += f' , {bid_amount}'
             break
     # c.bidders[user_address] += f' , {bid_amount}'
@@ -125,9 +137,9 @@ def place_bid(request, pk, user_address):
 
 
 @api_view(['GET'])
-def find_winner(request, pk):
+def find_winner(request, contractId):
     # Get the Contract object from the database
-    c = Contract.objects.get(pk=pk)
+    c = Contract.objects.get(pk=contractId)
 
     highest_amount = 0
     highest_address = None
@@ -147,19 +159,22 @@ def find_winner(request, pk):
 
 
 @api_view(['POST'])
-def add_member(request, pk):
+def add_member(request, contractId):
     # Get the Contract object from the database
-    c = Contract.objects.get(pk=pk)
+    c = Contract.objects.get(pk=contractId)
 
-    member = request.data.get('member_id')
+    member_id = request.data.get('member_id')
+    member = CustomUser.objects.get_or_create(
+        wallet_address=member_id, role='1')
     # Call the addMember method on the contract
     print(member)
     print(CONTRACT_ADDRESS)
 
-    contract.functions.addMember((pk-1),  member).transact()
+    # contract.functions.addMember(
+    #     (pk-1),  request.data.get('member_id')).transact()
 
     # Update the Contract object in the database
-    c.members.append(member)
+    c.members.add(member[0])
     c.save()
 
     # Redirect to the contract detail page
@@ -167,30 +182,52 @@ def add_member(request, pk):
 
 
 @api_view(['GET'])
-def get_contract(request, contract_id):
+def get_contract(request, contractId):
     # Get the Contract object from the database
-    c = Contract.objects.get(pk=contract_id)
+    c = Contract.objects.get(pk=contractId)
 
-    contract_data = contract.functions.getContract(contract_id-1)
+    # contract_data = contract.functions.getContract(contract_id-1)
 
-    # Format the response data
-    response_data = {
-        'contract_address': contract_data[0],
-        'start_time': contract_data[1],
-        'finish_time': contract_data[2],
-        'min_bid': contract_data[3],
-        'bidders': contract_data[4],
-        'members': contract_data[5],
-        'public_auction': contract_data[6]
-    }
+    # # Format the response data
+    # response_data = {
+    #     'contract_address': contract_data[0],
+    #     'start_time': contract_data[1],
+    #     'finish_time': contract_data[2],
+    #     'min_bid': contract_data[3],
+    #     'bidders': contract_data[4],
+    #     'members': contract_data[5],
+    #     'public_auction': contract_data[6]
+    # }
 
-    return Response(response_data, status=200)
+    return Response(ContractSerializer(c).data, status=200)
+
+
+@api_view(['GET'])
+def get_contracts(request):
+    # Get the Contract object from the database
+    c = Contract.objects.all()
+
+    # contract_data = contract.functions.getContract(contract_id-1)
+
+    # # Format the response data
+    # response_data = {
+    #     'contract_address': contract_data[0],
+    #     'start_time': contract_data[1],
+    #     'finish_time': contract_data[2],
+    #     'min_bid': contract_data[3],
+    #     'bidders': contract_data[4],
+    #     'members': contract_data[5],
+    #     'public_auction': contract_data[6]
+    # }
+
+    return Response(ContractSerializer(c, many=True).data, status=200)
 
 
 class CustomUserView(ModelViewSet):
     # permission_classes = [IsAuthenticated]
     serializer_class = CustomUserSerializer
     queryset = CustomUser.objects.all()
+    http_method_names = ['post']
 
 
 @swagger_auto_schema(method='POST', request_body=LoginSerializer)
@@ -209,10 +246,11 @@ def login(request):
             return Response({'error': 'Invalid credentials'}, status=401)
     except:
         return Response({'error': 'Invalid credentials'}, status=401)
-    
+
+
 @api_view(['GET'])
 def current_user(request):
     try:
         return Response(CustomUserSerializer(CustomUser.objects.get(id=request.user.id)).data)
     except:
-        return Response({'message':'user not valid'}, 403)
+        return Response({'message': 'user not valid'}, 403)

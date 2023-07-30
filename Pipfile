@@ -66,6 +66,8 @@ pyyaml = "==6.0"
 uritemplate = "==4.1.1"
 cffi = "==1.15.1"
 pycparser = "==2.21"
+django-cors = "*"
+django-cors-headers = "*"
 
 [dev-packages]
 

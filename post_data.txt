@@ -2,11 +2,24 @@
   "startTime": 1678923456,
   "finishTime": 1698929999,
   "minBid": 10,
+  "bidders":[],
   "members": [
     "0xAA8a8CA14c8cc895eac091bA35182F9D353AD9d7",
     "0xD07728c124a79d22a6Fb559b35E8416D501fE877"
   ],
   "publicAuction": true
+}
+
+
+{
+  "startTime": 1678923456,
+  "finishTime": 1698929999,
+  "minBid": 10,
+  "bidders":[],
+  "members": [
+    "0x43428E3FB979468dD1a8F6b31ae68A440b2ca6CB"
+  ],
+  "publicAuction": false
 }
 
 -----------------
@@ -17,5 +30,6 @@
 
 ----------------
 {
-"member_id":"0x6e80f65Cd0a8CDBd7233989b6cF9fC43b904708b"
+"member_id":"0x43b3Fa63292eb706367A951Bc3EDB9dB93f624EF"
 }
+
