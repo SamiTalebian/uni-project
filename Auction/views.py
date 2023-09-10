@@ -5,6 +5,7 @@ from web3 import Web3
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.decorators import api_view
+from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from django.contrib.auth import authenticate
 from Auction.models import Contract, CustomUser
@@ -48,6 +49,26 @@ contract = web3.eth.contract(
 web3.eth.default_account = web3.eth.accounts[0]
 
 
+@swagger_auto_schema(
+    method='POST',
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'startTime': openapi.Schema(type=openapi.TYPE_INTEGER),
+            'finishTime': openapi.Schema(type=openapi.TYPE_INTEGER),
+            'minBid': openapi.Schema(type=openapi.TYPE_INTEGER),
+            'bidders': openapi.Schema(
+                type=openapi.TYPE_ARRAY,
+                items=openapi.Items(type=openapi.TYPE_STRING),
+            ),
+            'members': openapi.Schema(
+                type=openapi.TYPE_ARRAY,
+                items=openapi.Items(type=openapi.TYPE_STRING),
+            ),
+            'publicAuction': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+        },
+    ),
+)
 @api_view(['POST'])
 def create_contract(request):
     contract_address = web3.to_checksum_address(CONTRACT_ADDRESS)
@@ -93,6 +114,12 @@ def create_contract(request):
     # Render the create contract form
 
 
+@swagger_auto_schema(method='POST', request_body=openapi.Schema(
+    type=openapi.TYPE_OBJECT,
+    properties={
+        'bid_amount': openapi.Schema(type=openapi.TYPE_NUMBER),
+    },
+),)
 @api_view(['POST'])
 def place_bid(request, contractId, userId):
     # Get the Contract object from the database
@@ -158,6 +185,12 @@ def find_winner(request, contractId):
     return Response({'address_winner': highest_address, 'amount': highest_amount}, 200)
 
 
+@swagger_auto_schema(method='POST', request_body=openapi.Schema(
+    type=openapi.TYPE_OBJECT,
+    properties={
+        'member_id': openapi.Schema(type=openapi.TYPE_STRING),
+    },
+),)
 @api_view(['POST'])
 def add_member(request, contractId):
     # Get the Contract object from the database
