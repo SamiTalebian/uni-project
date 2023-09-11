@@ -43,6 +43,7 @@ urlpatterns = [
     path('auth/current-user', views.current_user),
     path('contracts/<int:contractId>/add-member', views.add_member),
     path('contracts', views.get_contracts),
+    path('contracts/bidders', views.get_bidders),
     path('contracts/<int:contractId>', views.get_contract),
     path('contracts/create', views.create_contract),
     path('contracts/<int:contractId>/find-winner', views.find_winner),

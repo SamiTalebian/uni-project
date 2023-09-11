@@ -14,6 +14,7 @@ contract Auction {
 
     Contract[] public contracts;
     mapping(address => mapping(uint => uint)) public bids;
+    event Transfer(address indexed from, address indexed to, uint256 value);
 
     function createContract(
         address contractAddress,
@@ -37,72 +38,6 @@ contract Auction {
                 publicAuction
             )
         );
-    }
-
-    function placeBid(uint contractIndex) external payable {
-        Contract storage contractData = contracts[contractIndex];
-
-        require(
-            msg.value > contractData.minBid,
-            "Bid amount is less than the minimum bid."
-        );
-        require(
-            block.timestamp >= contractData.startTime,
-            "Auction has not started yet."
-        );
-        require(
-            block.timestamp < contractData.finishTime,
-            "Auction has ended."
-        );
-
-        if (!contractData.publicAuction) {
-            bool allowed = false;
-            for (uint i = 0; i < contractData.members.length; i++) {
-                if (contractData.members[i] == msg.sender) {
-                    allowed = true;
-                    break;
-                }
-            }
-            require(allowed, "You are not allowed to bid in this auction.");
-        }
-
-        if (bids[msg.sender][contractIndex] == 0) {
-            contractData.bidders.push(msg.sender);
-        }
-
-        bids[msg.sender][contractIndex] += msg.value;
-    }
-
-    function findTheWinner(uint contractIndex) external payable {
-        Contract storage contractData = contracts[contractIndex];
-
-        address winner;
-        uint highestBid = 0;
-
-        for (uint i = 0; i < contractData.bidders.length; i++) {
-            address bidder = contractData.bidders[i];
-            uint bidAmount = bids[bidder][contractIndex];
-
-            if (bidAmount > highestBid) {
-                winner = bidder;
-                highestBid = bidAmount;
-            }
-        }
-
-        payable(contractData.contractAddress).transfer(highestBid);
-
-        for (uint i = 0; i < contractData.bidders.length; i++) {
-            address bidder = contractData.bidders[i];
-            uint bidAmount = bids[bidder][contractIndex];
-
-            if (bidder != winner) {
-                payable(bidder).transfer(bidAmount);
-            }
-
-            delete bids[bidder][contractIndex];
-        }
-
-        delete contractData.bidders;
     }
 
     function addMember(uint contractIndex, address member) external {
@@ -141,5 +76,19 @@ contract Auction {
             contractData.members,
             contractData.publicAuction
         );
+    }
+
+    function transferFunds(
+        address payable from,
+        uint256 amount
+    ) external payable {
+        require(msg.sender != address(0), "Invalid sender address");
+        require(from != address(0), "Invalid recipient address");
+
+        // from.transfer(amount);
+        payable(msg.sender).transfer(amount);
+
+        // Emit an event to log the transfer
+        emit Transfer(from, msg.sender, amount);
     }
 }

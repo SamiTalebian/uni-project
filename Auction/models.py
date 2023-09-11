@@ -29,6 +29,7 @@ class Contract(models.Model):
     finish_time = models.DateTimeField()
     min_bid = models.FloatField()
     bidders = models.JSONField(null=True, blank=True)
+    is_done = models.BooleanField(default=False, null=True)
     members = models.ManyToManyField(
         'CustomUser', null=True, blank=True)
     public_auction = models.BooleanField(default=False)

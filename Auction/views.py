@@ -12,10 +12,10 @@ from Auction.models import Contract, CustomUser
 import datetime
 import os
 from rest_framework.viewsets import ModelViewSet
-from Auction.serializer import ContractSerializer, CustomUserSerializer, LoginSerializer
+from Auction.serializer import BiddersSerializer, ContractSerializer, CustomUserSerializer, LoginSerializer
 
 web3 = Web3(Web3.HTTPProvider('HTTP://127.0.0.1:7545'))
-PRIVATE_KEY = '0x33228ce70aeb09ea6089fc19af87ca65949c850ee7eb6683252626810931fd1e'
+PRIVATE_KEY = '0xe6c92058fdd4e22740f6346c0f0661a52f5234b3fa319aeb03df3b702f86a867'
 
 with open('bin/Auction/Auction.json') as f:
     contract_json = json.load(f)
@@ -57,10 +57,6 @@ web3.eth.default_account = web3.eth.accounts[0]
             'startTime': openapi.Schema(type=openapi.TYPE_INTEGER),
             'finishTime': openapi.Schema(type=openapi.TYPE_INTEGER),
             'minBid': openapi.Schema(type=openapi.TYPE_INTEGER),
-            'bidders': openapi.Schema(
-                type=openapi.TYPE_ARRAY,
-                items=openapi.Items(type=openapi.TYPE_STRING),
-            ),
             'members': openapi.Schema(
                 type=openapi.TYPE_ARRAY,
                 items=openapi.Items(type=openapi.TYPE_STRING),
@@ -71,7 +67,7 @@ web3.eth.default_account = web3.eth.accounts[0]
 )
 @api_view(['POST'])
 def create_contract(request):
-    contract_address = web3.to_checksum_address(CONTRACT_ADDRESS)
+    contract_address = web3.eth.accounts[0]
     start_time = request.data.get('startTime')
     finish_time = request.data.get('finishTime')
     min_bid = request.data.get('minBid')
@@ -94,19 +90,19 @@ def create_contract(request):
     # Create a new Contract object and save it to the database
     c = Contract(
         contract_address=contract_address,
-        start_time=datetime.datetime.fromtimestamp(int(start_time)),
-        finish_time=datetime.datetime.fromtimestamp(int(finish_time)),
+        start_time=datetime.datetime.fromtimestamp(int(start_time/1000)),
+        finish_time=datetime.datetime.fromtimestamp(int(finish_time/1000)),
         min_bid=min_bid,
         public_auction=public_auction
     )
     c.save()
     for member in members:
-        m = CustomUser.objects.get_or_create(
-            username=member, wallet_address=member, role=1)
-        if m[1] == False:
-            m[0].save()
-
-        c.members.add(m[0])
+        try:
+            m = CustomUser.objects.get(
+                wallet_address=member, role='bidder')
+        except:
+            return Response('user not found', 404)
+        c.members.add(m)
     c.save()
 
     return Response('object saved', status=200)
@@ -129,7 +125,7 @@ def place_bid(request, contractId, userId):
     # Get the form data
     bid_amount = int(request.data.get('bid_amount'))
 
-    if bid_amount <= c.min_bid:
+    if bid_amount < c.min_bid:
         return Response('Bid amount is less than the minimum bid.', status=400)
 
     if not c.public_auction:
@@ -137,27 +133,22 @@ def place_bid(request, contractId, userId):
         if not allowed:
             return Response('You are not allowed to bid in this auction.', status=406)
 
+    temp = []
+    if c.bidders is not None:
+        for item in c.bidders:
+            temp.append(item.split(',')[0])
     # Perform the bid
-    if user.wallet_address not in c.bidders:
-        c.bidders.append(user.wallet_address)
+    if c.bidders is None or user.wallet_address not in temp:
+        c.bidders = []
+        c.bidders.append(f'{user.wallet_address}, {bid_amount}')
     else:
-        c.bidders.remove(user.wallet_address)
-        c.bidders.append(user.wallet_address)
+        for bidder in c.bidders:
+            parts = bidder.split(',')
+            if parts[0].strip() == user.wallet_address:
+                c.bidders.remove(bidder)
+                break
+        c.bidders.append(f'{user.wallet_address}, {bid_amount}')
 
-    transaction = contract.functions.placeBid(contractId-1).transact(
-        {'from': user.wallet_address, 'value': bid_amount})
-
-    # Wait for the transaction to be mined
-    transaction_receipt = web3.eth.wait_for_transaction_receipt(transaction)
-    # transaction_hash = web3.toHex(transaction)
-
-    for i, value in enumerate(c.bidders):
-        if value == user.wallet_address:
-            c.bidders[i] += f' , {bid_amount}'
-            break
-    # c.bidders[user_address] += f' , {bid_amount}'
-
-    # Save the updated contract
     c.save()
 
     return Response('Bid placed successfully.', status=200)
@@ -172,7 +163,11 @@ def find_winner(request, contractId):
     highest_address = None
     highest_string = None
 
-    for entry in c.bidders:
+    bidders = c.bidders
+    if bidders is None:
+        return Response('پیشنهادی ثبت نشده است.', 400)
+
+    for entry in bidders:
         # Split the entry into address and amount
         address, amount = entry.split(', ')
         amount = int(amount)
@@ -181,8 +176,20 @@ def find_winner(request, contractId):
             highest_amount = amount
             highest_address = address
 
-    # Redirect to the contract detail page
-    return Response({'address_winner': highest_address, 'amount': highest_amount}, 200)
+    # tx_hash = contract.functions.transferFunds(
+    #     highest_address, int(highest_amount)
+    # ).transact()
+
+    web3.eth.send_transaction({
+        'from': highest_address,
+        'to': web3.eth.accounts[0],
+        'value': web3.to_wei(str(highest_amount), 'ether')
+    })
+
+    # web3.eth.wait_for_transaction_receipt(tx_hash)
+    c.is_done = True
+    c.save()
+    return Response({'address_winner': highest_address, 'amount': highest_amount, 'username': CustomUser.objects.get(wallet_address=highest_address).username or None}, 200)
 
 
 @swagger_auto_schema(method='POST', request_body=openapi.Schema(
@@ -287,3 +294,9 @@ def current_user(request):
         return Response(CustomUserSerializer(CustomUser.objects.get(id=request.user.id)).data)
     except:
         return Response({'message': 'user not valid'}, 403)
+
+
+@api_view(['GET'])
+def get_bidders(self):
+    list = CustomUser.objects.filter(role='bidder')
+    return Response(BiddersSerializer(list, many=True).data)
