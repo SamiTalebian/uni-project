@@ -43,10 +43,6 @@ contract Auction {
     function addMember(uint contractIndex, address member) external {
         Contract storage contractData = contracts[contractIndex];
 
-        // require(
-        //     msg.sender == contractData.contractAddress,
-        //     "Only contract owner can add members."
-        // );
         contractData.members.push(member);
     }
 
